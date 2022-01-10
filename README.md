@@ -6,7 +6,7 @@ Here is an Example:
 
 <br>
 
-![Screenshot (28)](https://user-images.githubusercontent.com/86141125/148406871-0d8dcd9a-7dc4-4d16-9c45-a0b6ce16a90a.png)
+![Screenshot (28)](https://user-images.githubusercontent.com/86141125/148747177-754c0f83-c39c-4740-9d66-fe728854346b.png)
 
 <br>
 
