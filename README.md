@@ -124,3 +124,123 @@ def images_to_array(directory, label_dataframe, target_size = input_size):
 
   return images,y
   ```
+
+Now we have the desired format of images. Now we can jump into model training process.
+
+Model Training
+----------------------
+
+Here I am using Transfer Learning. For extracting the features from images, I am combining 4 types of CNN model. those are - InceptionResnetV2, InceptionV3, Xception and NasNetLarge. Those models are previously trained on a large dataset named Imagenet and already available in keras package. all we need to do is just import those models.
+
+```
+# Importing the models
+from tensorflow.keras.applications.inception_resnet_v2 import InceptionResNetV2, preprocess_input as resnet_preprocess
+from tensorflow.keras.applications.inception_v3 import InceptionV3, preprocess_input as inception_preprocess
+from tensorflow.keras.applications.xception import Xception, preprocess_input as xception_preprocess
+from tensorflow.keras.applications.nasnet import NASNetLarge, preprocess_input as nasnet_preprocess
+from tensorflow.keras.layers import concatenate
+
+input_shape = (331,331,3)
+input_layer = Input(shape=input_shape)
+
+
+preprocessor_resnet = Lambda(resnet_preprocess)(input_layer)
+inception_resnet = InceptionResNetV2(weights = 'imagenet', 
+                                     include_top = False, input_shape = input_shape, pooling = 'avg')(preprocessor_resnet)
+
+preprocessor_inception = Lambda(inception_preprocess)(input_layer)
+inception_v3 = InceptionV3(weights = 'imagenet', 
+                           include_top = False, input_shape = input_shape, pooling = 'avg')(preprocessor_inception)
+
+preprocessor_xception = Lambda(xception_preprocess)(input_layer)
+xception = Xception(weights = 'imagenet', 
+                    include_top = False, input_shape = input_shape, pooling = 'avg')(preprocessor_xception)
+
+preprocessor_nasnet = Lambda(nasnet_preprocess)(input_layer)
+nasnet = NASNetLarge(weights = 'imagenet', 
+                     include_top = False, input_shape = input_shape, pooling = 'avg')(preprocessor_nasnet)
+
+#Merging the models
+merge = concatenate([inception_resnet, inception_v3, xception, nasnet])
+model = Model(inputs = input_layer, outputs = merge)
+```
+
+The feature extraction model will look like this.
+
+![download (2)](https://user-images.githubusercontent.com/86141125/148910422-859ead93-5667-429b-b185-1605245e55e5.png)
+
+here we exclude the fully connected layer. 
+
+Now we define some variables. I am using EarlyStopping to ignore the risk of overfitting the model. 
+
+```
+lrr = ReduceLROnPlateau(monitor = 'val_loss', factor = 0.01, patience = 3, min_lr = 1e-5, verbose = 1)
+EarlyStop = EarlyStopping(monitor = 'val_loss', patience = 10, restore_best_weights = True)
+
+batch_size = 128
+epochs = 50
+learn_rate = 0.001
+sgd = SGD(learning_rate = learn_rate, momentum = 0.9, nesterov = False)
+adam = Adam(learning_rate = learn_rate, beta_1 = 0.9, beta_2 = 0.999, epsilon = None, amsgrad = False)
+```
+
+After that, we pass the image array to the previously combined model and then we pass the extracted output to the fully connected layer
+which we will make now.
+
+```
+# Passing the image array in feature extractor model
+feature_maps = model.predict(X, verbose=1)
+
+
+# making fully connected layer and pass the extracted output
+from tensorflow.keras.layers import Dropout
+from tensorflow.keras.models import Sequential
+
+dnn = Sequential()
+dnn.add(Dropout(0.7, input_shape = (feature_maps.shape[1],)))
+dnn.add(Dense(n_classes, activation='softmax'))
+
+dnn.compile(optimizer = adam, loss = 'categorical_crossentropy', metrics=['accuracy'])
+
+history = dnn.fit(feature_maps, y, batch_size = batch_size, epochs = epochs, validation_split = 0.2, callbacks=[lrr,EarlyStop])
+```
+
+after training the model, now we can see how good our model perform by comparing the training accuracy and validation accuracy. 
+
+```
+plt.figure(figsize=(12,8))
+plt.plot(history.history['accuracy'], color = 'r')
+plt.plot(history.history['val_accuracy'], color = 'b')
+plt.title("Model Accuracy")
+plt.xlabel("Epochs")
+plt.ylabel("Accuracy")
+plt.legend(['train','val'])
+plt.show()
+```
+
+![download (3)](https://user-images.githubusercontent.com/86141125/148913548-c05002a4-4f3b-4956-9dfb-a25040e453f2.png)
+
+it seems that model is performing well but it can be tuned further.
+
+now let's test one image. I choose a image of a gold retriever.
+
+![download (2)](https://user-images.githubusercontent.com/86141125/148914389-8ae32827-b8dd-4837-a26a-fc27c638c9b9.jpg)
+
+```
+img_size = (331,331,3)
+img_g = image.load_img("golden_retriever.jpg", target_size=img_size)
+img_g = np.expand_dims(img_g, axis = 0)
+
+test_features = model.predict(img_g)
+predg = dnn.predict(test_features)
+print(f"Predicted label: {classes[np.argmax(predg[0])]}")
+print(f"Probablity of prediction: {round(np.max(predg[0])) * 100} % ")
+```
+![Screenshot (36)](https://user-images.githubusercontent.com/86141125/148914891-ba8a8918-1fd4-4c8f-ac33-451234c1d01c.png)
+
+that's great. it predicts gold retriever 100%. 
+
+That's all for this. 
+
+<br>
+<br>
